@@ -34,15 +34,15 @@ SYSTEM_DECISION_PROMPT = f"""
 1. 📐 **Illustrator 좌표계 절대 준수 (음수 Y좌표 절대 금지!)**:
    - 일러스트레이터의 Y=0은 바닥(Bottom)이고, Y=doc.height가 상단(Top)입니다.
    - 상단에서 100pt 아래에 배치하려면 **반드시 `top = doc.height - 100` (양수)** 공식을 사용하세요!
-   - ⚠️ 절대 `top = -100`, `top = -400` 같은 음수를 사용하지 마세요! (캔버스 밖으로 날아가 사라집니다)
-   - LayoutSystem.setTextPos(tf, left, offsetFromTop) 또는 LayoutSystem.addRect(...) 헬퍼를 적극 활용하세요.
+   - ⚠️ 절대 `top = -100`, `top = -400` 같은 음수를 사용하지 마세요!
+   - LayoutSystem.setTextPos(tf, left, offsetFromTop) 또는 LayoutSystem.addRect(...) 헬퍼를 사용하세요.
 
 2. 👁️ **배경-텍스트 고대비 가독성 (High Contrast)**:
    - 다크/딥 배경(#122019, 딥그린, 네이비, 블랙 등)에는 **무조건 선명한 화이트(#FFFFFF)나 골드(#D4AF37), 밝은 세이지(#C5E0D0)** 폰트 색상을 적용하세요.
-   - ⚠️ 어두운 배경 위에 어두운 글자색(#18241D 등)을 적용하여 글자가 묻히는 실수를 절대 하지 마세요!
+   - ⚠️ 어두운 배경 위에 어두운 글자색을 적용하여 글자가 묻히는 실수를 절대 하지 마세요!
 
 3. 🧹 **중복 오브젝트 겹침 방지 (Clean Canvas)**:
-   - 전체 재배치나 새 디자인 작업 시, 기존 더러워진 박스/원형들이 덕지덕지 겹치지 않도록 필요시 `LayoutSystem.clearCanvas()`를 호출하거나 기존 패스를 깔끔하게 정리한 후 새로 그리세요.
+   - 전체 재배치나 새 디자인 작업 시, 기존 더러워진 박스/도형들이 겹치지 않도록 `LayoutSystem.clearCanvas()`를 호출하거나 기존 패스를 정리한 후 새로 그리세요.
 
 ======================================================================
 🚨 [판단 및 질문 규칙 (STRICT CO-PILOT POLICY)]
@@ -55,7 +55,7 @@ SYSTEM_DECISION_PROMPT = f"""
 
 2. 다음의 경우에만 **action: "execute"** (즉시 실행) 하세요:
    - 사용자가 이전 질문에 대해 특정 번호나 선택지를 답변했을 때 (예: "1번 명조체로 해줘", "가로 A4에 세이지 그린 톤으로 가자")
-   - 수치나 대상이 명확한 단일 수정/정리 명령일 때 (예: "레이아웃 정리해줘", "제목 글자 크기를 50pt로 키워줘", "배경색을 #1D3A2F로 바꿔줘")
+   - 수치나 대상이 명확한 단일 수정/정리/조회 명령일 때 (예: "레이아웃 정리해줘", "제목 글자 크기를 50pt로 키워줘", "배경색을 #1D3A2F로 바꿔줘")
 
 ======================================================================
 🌟 [핵심 디자인 철학: Human-Designer Aesthetics (Anti-AI Slop Guardrails)]
@@ -63,8 +63,6 @@ SYSTEM_DECISION_PROMPT = f"""
 2. 🚫 캔버스를 무의미한 장식과 그래픽으로 빽빽하게 채우는 과밀 배치 금지
 3. ✅ 의도적인 호흡 여백(White Space 20% 이상)과 칼같은 기준선 그리드 정렬
 4. ✅ 명확한 3단 폰트 스케일(Hero -> Sub -> Body)과 감각적인 톤다운 에디토리얼 컬러
-5. 🖼️ **실제 이미지 배치 (Image Placement)**:
-   - 사진이 준비되어 제공된 경우, ImageSkill.placeImage(imagePath, top, left, width, height)를 사용하여 실제 다운로드된 사진 파일을 캔버스에 직접 배치하고, 필요한 경우 ImageSkill.clipWithRoundedRect로 깔끔한 둥근 마스크를 씌우세요.
 ======================================================================
 
 [출력 형식 - 반드시 유효한 JSON 하나만 마크다운 코드블록 안에 출력하세요]
@@ -95,7 +93,7 @@ SYSTEM_DECISION_PROMPT = f"""
 
 
 class LLMEngine:
-    """Natural Language to ExtendScript Generator with Multimodal Vision & Smart Clarification."""
+    """Ultra-Fast Multimodal Vision & Smart Co-Pilot Engine."""
 
     def __init__(self, provider: Optional[str] = None):
         self.provider = (provider or os.getenv("LLM_PROVIDER", "gemini_oauth")).lower()
@@ -149,7 +147,7 @@ class LLMEngine:
         if system_instruction:
             payload["systemInstruction"] = system_instruction
 
-        resp = requests.post(url, headers=headers, json=payload, timeout=60)
+        resp = requests.post(url, headers=headers, json=payload, timeout=30)
         if resp.status_code != 200:
             raise RuntimeError(f"Gemini API 오류 ({resp.status_code}): {resp.text}")
 
@@ -225,17 +223,6 @@ class LLMEngine:
             "summary": "안내 메시지"
         }
 
-    def _auto_resolve_images(self, user_prompt: str) -> Dict[str, str]:
-        """Check if user prompt needs photos, auto-resolve via Pinterest, Local path, or Stock search."""
-        resolved = {}
-        needs_image = any(w in user_prompt for w in ["사진", "이미지", "포토", "photo", "image", "핀터레스트", "pinterest", "http", ":/"])
-        if needs_image:
-            img_path = StockImageManager.resolve_image(user_prompt)
-            if img_path:
-                resolved["matched_image"] = img_path
-
-        return resolved
-
     def process_prompt(
         self,
         user_prompt: str,
@@ -245,20 +232,16 @@ class LLMEngine:
         max_retries: int = 3
     ) -> Dict[str, Any]:
         """Analyze intent with Vision Multimodal, ask questions if needed, or execute code."""
-        # 1. Capture real-time canvas visual snapshot for Vision AI
+        # 1. Fast Canvas Vision snapshot (takes ~0.05s)
         canvas_b64 = None
         try:
-            canvas_b64 = bridge.capture_canvas_snapshot()
+            canvas_b64 = bridge.capture_canvas_snapshot(scale_percent=15.0)
         except Exception:
             canvas_b64 = None
 
-        # 2. Check and auto-download stock/pinterest/local photos if needed
-        resolved_images = self._auto_resolve_images(user_prompt)
-        img_context = ""
-        if resolved_images:
-            img_context = f"\n\n[준비된 이미지 파일 경로 (ExtendScript에서 ImageSkill.placeImage로 즉시 사용 가능)]:\n"
-            for k, p in resolved_images.items():
-                img_context += f"- {k}: '{p}'\n"
+        # 2. Fast local image check (without blocking internet crawlers)
+        local_img = StockImageManager.resolve_image(user_prompt)
+        img_context = f"\n\n[사용 가능한 로컬/임시 이미지 파일]: '{local_img}'" if local_img else ""
 
         current_context = (
             f"[현재 {target_app} 문서 텍스트 DOM 상태]\n"

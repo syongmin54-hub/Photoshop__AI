@@ -48,7 +48,7 @@ SYSTEM_DECISION_PROMPT = f"""
 3. ✅ 의도적인 호흡 여백(White Space 20% 이상)과 칼같은 기준선 그리드 정렬
 4. ✅ 명확한 3단 폰트 스케일(Hero -> Sub -> Body)과 감각적인 톤다운 에디토리얼 컬러
 5. 🖼️ **실제 이미지 배치 (Image Placement)**:
-   - 사진이 필요할 때 ImageSkill.placeImage(imagePath, top, left, width, height)를 사용하여 실제 다운로드된 사진 파일을 캔버스에 직접 배치하고, 필요한 경우 ImageSkill.clipWithRoundedRect로 깔끔한 둥근 마스크를 씌우세요.
+   - 사진이 준비되어 제공된 경우, ImageSkill.placeImage(imagePath, top, left, width, height)를 사용하여 실제 다운로드된 사진 파일을 캔버스에 직접 배치하고, 필요한 경우 ImageSkill.clipWithRoundedRect로 깔끔한 둥근 마스크를 씌우세요.
 ======================================================================
 
 [출력 형식 - 반드시 유효한 JSON 하나만 마크다운 코드블록 안에 출력하세요]
@@ -106,7 +106,6 @@ class LLMEngine:
                 system_instruction = {"parts": [{"text": m["content"]}]}
             elif m["role"] == "user":
                 parts = []
-                # If image is attached to current turn, inject as inlineData
                 if image_base64 and m == messages[-1]:
                     parts.append({
                         "inlineData": {
@@ -211,32 +210,15 @@ class LLMEngine:
         }
 
     def _auto_resolve_images(self, user_prompt: str) -> Dict[str, str]:
-        """Check if user prompt needs photos/images, search royalty-free stock or resolve local path."""
+        """Check if user prompt needs photos, auto-resolve via Pinterest, Local path, or Stock search."""
         resolved = {}
         
-        # 1. Check for local path in prompt (e.g. C:/Photos/... or D:\...)
-        path_matches = re.findall(r'[A-Za-z]:[\\/][^\s"\']+', user_prompt)
-        for pm in path_matches:
-            local_res = StockImageManager.resolve_local_image(pm)
-            if local_res:
-                resolved["local_image"] = local_res
-
-        # 2. Check if user asks for stock photo keywords (사진, 이미지, photo, image)
-        if any(w in user_prompt for w in ["사진", "이미지", "포토", "photo", "image"]):
-            # Extract keywords
-            if any(k in user_prompt for k in ["한의원", "한약", "침", "clinic", "herbal"]):
-                stock_path = StockImageManager.search_and_download_stock("korean herbal medicine acupuncture clinic")
-            elif any(k in user_prompt for k in ["카페", "커피", "coffee", "cafe"]):
-                stock_path = StockImageManager.search_and_download_stock("specialty coffee beans barista cafe")
-            elif any(k in user_prompt for k in ["세일", "쇼핑", "sale", "shopping"]):
-                stock_path = StockImageManager.search_and_download_stock("summer fashion shopping sale")
-            elif any(k in user_prompt for k in ["건축", "인테리어", "interior", "architecture"]):
-                stock_path = StockImageManager.search_and_download_stock("modern minimalist interior architecture")
-            else:
-                stock_path = StockImageManager.search_and_download_stock("aesthetic minimalist design")
-
-            if stock_path:
-                resolved["stock_image"] = stock_path
+        # Check if user prompt mentions images, photos, pinterest, local paths
+        needs_image = any(w in user_prompt for w in ["사진", "이미지", "포토", "photo", "image", "핀터레스트", "pinterest", "http", ":/"])
+        if needs_image:
+            img_path = StockImageManager.resolve_image(user_prompt)
+            if img_path:
+                resolved["matched_image"] = img_path
 
         return resolved
 
@@ -256,7 +238,7 @@ class LLMEngine:
         except Exception:
             canvas_b64 = None
 
-        # 2. Check and auto-download stock photos or resolve local photos if needed
+        # 2. Check and auto-download stock/pinterest/local photos if needed
         resolved_images = self._auto_resolve_images(user_prompt)
         img_context = ""
         if resolved_images:

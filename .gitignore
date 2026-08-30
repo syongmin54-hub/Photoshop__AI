@@ -1,0 +1,16 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+
+# Secrets & Local Tokens (절대 공유 금지 파일)
+.env
+gemini_token.json
+client_secret.json
+
+# Local temporary files
+*.tmp
+*.log
+font_backup/

@@ -7,6 +7,7 @@ import requests
 from dotenv import load_dotenv
 from core.gemini_oauth import GeminiOAuthManager
 from core.compat import get_resource_path
+from core.image_search import StockImageManager
 
 load_dotenv()
 
@@ -24,8 +25,8 @@ def load_skills_summary() -> str:
     return "\n\n".join(skills_text)
 
 SYSTEM_DECISION_PROMPT = f"""
-당신은 사용자와 긴밀하게 소통하며 함께 작품을 완성해나가는 전문 Adobe 아트 디렉터 Co-Pilot입니다.
-혼자 독단적으로 결정하여 코드를 실행하지 말고, **사용자에게 적극적으로 질문하고 옵션을 제안하는 것을 최우선 원칙**으로 삼으세요.
+당신은 최고의 Adobe Photoshop & Illustrator 전문 멀티모달 AI 아트 디렉터이자 ExtendScript(JSX) 엔지니어입니다.
+당신은 사용자의 지시, 현재 열린 문서의 텍스트 DOM 상태(JSON), **그리고 실시간 캔버스 캡처 이미지(Vision)**를 모두 보고 판단합니다.
 
 ======================================================================
 🚨 [판단 및 질문 규칙 (STRICT CO-PILOT POLICY)]
@@ -33,12 +34,12 @@ SYSTEM_DECISION_PROMPT = f"""
 1. 다음의 경우에는 절대로 바로 코드를 실행하지 말고, 반드시 **action: "ask"** 로 질문하세요:
    - 새로운 디자인/배너/포스터/카드 제작 요청 시 (예: "한의원 배너 만들어줘", "새 파일 만들고 홍보물 짜줘")
    - 주관적인 피드백이나 개선 요청 시 (예: "폰트가 구린데", "느낌이 별로야", "색상이 맘에 안 들어", "더 세련되게 바꿔줘")
-   - 디자인 선택지가 여러 가지 존재할 때 (예: "어떤 폰트 계열로 갈까요? 1) 묵직한 궁서/명조, 2) 깔끔한 모던 고딕, 3) 감성 캘리그래피")
-   -> 사용자에게 2~3가지 명확하고 매력적인 선택지를 번호 매겨 친절하게 제안하세요.
+   - 디자인 선택지가 여러 가지 존재할 때
+   -> 2~3가지 명확하고 매력적인 선택지를 번호 매겨 친절하게 제안하세요.
 
 2. 다음의 경우에만 **action: "execute"** (즉시 실행) 하세요:
    - 사용자가 이전 질문에 대해 특정 번호나 선택지를 답변했을 때 (예: "1번 명조체로 해줘", "가로 A4에 세이지 그린 톤으로 가자")
-   - 수치나 대상이 명확한 단일 수정 명령일 때 (예: "제목 글자 크기를 50pt로 키워줘", "배경색을 #1D3A2F로 바꿔줘", "레이어 하나 지워줘")
+   - 수치나 대상이 명확한 단일 수정 명령일 때 (예: "제목 글자 크기를 50pt로 키워줘", "배경색을 #1D3A2F로 바꿔줘")
 
 ======================================================================
 🌟 [핵심 디자인 철학: Human-Designer Aesthetics (Anti-AI Slop Guardrails)]
@@ -46,6 +47,8 @@ SYSTEM_DECISION_PROMPT = f"""
 2. 🚫 캔버스를 무의미한 장식과 그래픽으로 빽빽하게 채우는 과밀 배치 금지
 3. ✅ 의도적인 호흡 여백(White Space 20% 이상)과 칼같은 기준선 그리드 정렬
 4. ✅ 명확한 3단 폰트 스케일(Hero -> Sub -> Body)과 감각적인 톤다운 에디토리얼 컬러
+5. 🖼️ **실제 이미지 배치 (Image Placement)**:
+   - 사진이 필요할 때 ImageSkill.placeImage(imagePath, top, left, width, height)를 사용하여 실제 다운로드된 사진 파일을 캔버스에 직접 배치하고, 필요한 경우 ImageSkill.clipWithRoundedRect로 깔끔한 둥근 마스크를 씌우세요.
 ======================================================================
 
 [출력 형식 - 반드시 유효한 JSON 하나만 마크다운 코드블록 안에 출력하세요]
@@ -69,13 +72,14 @@ SYSTEM_DECISION_PROMPT = f"""
 {load_skills_summary()}
 
 [ExtendScript 작성 시 필수 규칙]
-1. Illustrator DOM: app.activeDocument, doc.pathItems, doc.textFrames 등을 정확하게 사용하세요.
-2. 코드 마지막에 `return JSON.stringify({{"success": true, "message": "요약"}});` 형식으로 결과를 반환하도록 작성하세요.
+1. Illustrator DOM: app.activeDocument, doc.pathItems, doc.textFrames, doc.placedItems 등을 정확하게 사용하세요.
+2. 폰트 적용 시: TypographySkill.koreanFonts 매핑 테이블의 검증된 PostScript 이름을 우선 사용하세요.
+3. 코드 마지막에 `return JSON.stringify({{"success": true, "message": "요약"}});` 형식으로 결과를 반환하도록 작성하세요.
 """
 
 
 class LLMEngine:
-    """Natural Language to ExtendScript Generator with Smart Clarification & Self-Healing."""
+    """Natural Language to ExtendScript Generator with Multimodal Vision & Smart Clarification."""
 
     def __init__(self, provider: Optional[str] = None):
         self.provider = (provider or os.getenv("LLM_PROVIDER", "gemini_oauth")).lower()
@@ -83,14 +87,14 @@ class LLMEngine:
         self.anthropic_key = os.getenv("ANTHROPIC_API_KEY")
         self.custom_base_url = os.getenv("CUSTOM_BASE_URL", "http://localhost:11434/v1")
         self.oauth_manager = GeminiOAuthManager()
-        self.history: List[Dict[str, str]] = []
+        self.history: List[Dict[str, Any]] = []
 
     def clear_history(self):
         """Reset conversation context history."""
         self.history = []
 
-    def _call_gemini_oauth(self, messages: List[Dict[str, str]]) -> str:
-        """Call Gemini REST API using Google OAuth 2.0 Bearer Access Token."""
+    def _call_gemini_oauth(self, messages: List[Dict[str, Any]], image_base64: Optional[str] = None) -> str:
+        """Call Gemini REST API using Google OAuth 2.0 with optional Vision Multimodal image payload."""
         token = self.oauth_manager.get_valid_token()
         model_name = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
         
@@ -101,7 +105,17 @@ class LLMEngine:
             if m["role"] == "system":
                 system_instruction = {"parts": [{"text": m["content"]}]}
             elif m["role"] == "user":
-                contents.append({"role": "user", "parts": [{"text": m["content"]}]})
+                parts = []
+                # If image is attached to current turn, inject as inlineData
+                if image_base64 and m == messages[-1]:
+                    parts.append({
+                        "inlineData": {
+                            "mimeType": "image/png",
+                            "data": image_base64
+                        }
+                    })
+                parts.append({"text": m["content"]})
+                contents.append({"role": "user", "parts": parts})
             elif m["role"] == "assistant":
                 contents.append({"role": "model", "parts": [{"text": m["content"]}]})
 
@@ -130,10 +144,10 @@ class LLMEngine:
         except (KeyError, IndexError):
             raise RuntimeError(f"Gemini 응답 파싱 실패: {res_data}")
 
-    def _call_llm(self, messages: List[Dict[str, str]]) -> str:
+    def _call_llm(self, messages: List[Dict[str, Any]], image_base64: Optional[str] = None) -> str:
         """Call LLM based on configured provider."""
         if self.provider == "gemini_oauth" or self.provider == "gemini":
-            return self._call_gemini_oauth(messages)
+            return self._call_gemini_oauth(messages, image_base64)
 
         elif self.provider == "openai" or self.provider == "custom":
             import openai
@@ -196,6 +210,36 @@ class LLMEngine:
             "summary": "안내 메시지"
         }
 
+    def _auto_resolve_images(self, user_prompt: str) -> Dict[str, str]:
+        """Check if user prompt needs photos/images, search royalty-free stock or resolve local path."""
+        resolved = {}
+        
+        # 1. Check for local path in prompt (e.g. C:/Photos/... or D:\...)
+        path_matches = re.findall(r'[A-Za-z]:[\\/][^\s"\']+', user_prompt)
+        for pm in path_matches:
+            local_res = StockImageManager.resolve_local_image(pm)
+            if local_res:
+                resolved["local_image"] = local_res
+
+        # 2. Check if user asks for stock photo keywords (사진, 이미지, photo, image)
+        if any(w in user_prompt for w in ["사진", "이미지", "포토", "photo", "image"]):
+            # Extract keywords
+            if any(k in user_prompt for k in ["한의원", "한약", "침", "clinic", "herbal"]):
+                stock_path = StockImageManager.search_and_download_stock("korean herbal medicine acupuncture clinic")
+            elif any(k in user_prompt for k in ["카페", "커피", "coffee", "cafe"]):
+                stock_path = StockImageManager.search_and_download_stock("specialty coffee beans barista cafe")
+            elif any(k in user_prompt for k in ["세일", "쇼핑", "sale", "shopping"]):
+                stock_path = StockImageManager.search_and_download_stock("summer fashion shopping sale")
+            elif any(k in user_prompt for k in ["건축", "인테리어", "interior", "architecture"]):
+                stock_path = StockImageManager.search_and_download_stock("modern minimalist interior architecture")
+            else:
+                stock_path = StockImageManager.search_and_download_stock("aesthetic minimalist design")
+
+            if stock_path:
+                resolved["stock_image"] = stock_path
+
+        return resolved
+
     def process_prompt(
         self,
         user_prompt: str,
@@ -204,17 +248,37 @@ class LLMEngine:
         target_app: str = "illustrator",
         max_retries: int = 3
     ) -> Dict[str, Any]:
-        """Analyze intent, ask questions if needed, or execute code with self-healing."""
-        current_context = f"[현재 {target_app} 문서 상태]\n{json.dumps(doc_state, ensure_ascii=False, indent=2)}\n\n[사용자 지시]\n{user_prompt}"
+        """Analyze intent with Vision Multimodal, ask questions if needed, or execute code."""
+        # 1. Capture real-time canvas visual snapshot for Vision AI
+        canvas_b64 = None
+        try:
+            canvas_b64 = bridge.capture_canvas_snapshot()
+        except Exception:
+            canvas_b64 = None
+
+        # 2. Check and auto-download stock photos or resolve local photos if needed
+        resolved_images = self._auto_resolve_images(user_prompt)
+        img_context = ""
+        if resolved_images:
+            img_context = f"\n\n[준비된 이미지 파일 경로 (ExtendScript에서 ImageSkill.placeImage로 즉시 사용 가능)]:\n"
+            for k, p in resolved_images.items():
+                img_context += f"- {k}: '{p}'\n"
+
+        current_context = (
+            f"[현재 {target_app} 문서 텍스트 DOM 상태]\n"
+            f"{json.dumps(doc_state, ensure_ascii=False, indent=2)}"
+            f"{img_context}\n\n"
+            f"[사용자 지시]\n{user_prompt}"
+        )
         
         messages = [{"role": "system", "content": SYSTEM_DECISION_PROMPT}]
         messages.extend(self.history)
         messages.append({"role": "user", "content": current_context})
 
-        raw_response = self._call_llm(messages)
+        raw_response = self._call_llm(messages, image_base64=canvas_b64)
         decision = self.extract_json_or_code(raw_response)
 
-        # 1. If LLM decides to ask clarifying questions
+        # A. If LLM decides to ask clarifying questions
         if decision.get("action") == "ask":
             question_text = decision.get("question", raw_response)
             self.history.append({"role": "user", "content": user_prompt})
@@ -225,7 +289,7 @@ class LLMEngine:
                 "summary": decision.get("summary", "")
             }
 
-        # 2. If LLM decides to execute code
+        # B. If LLM decides to execute code
         code = decision.get("code", "")
         summary = decision.get("summary", "")
 

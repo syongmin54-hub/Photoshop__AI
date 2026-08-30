@@ -1,4 +1,7 @@
+import base64
 import json
+import os
+from pathlib import Path
 from typing import Any, Dict, Optional
 import core.compat  # noqa: F401
 from core.json_polyfill import EXTENDSCRIPT_JSON_POLYFILL
@@ -11,6 +14,7 @@ class PhotoshopBridge:
     def __init__(self):
         self.app = None
         self._connected = False
+        self.temp_snapshot_path = (Path.cwd() / "temp_images" / "canvas_snapshot_ps.png").resolve()
 
     def connect(self) -> bool:
         """Connect to or launch Adobe Photoshop."""
@@ -73,6 +77,34 @@ __res__;
             return {"success": True, "result": None}
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    def capture_canvas_snapshot(self) -> Optional[str]:
+        """Fast export current active Photoshop canvas to PNG and return base64 string for Vision AI."""
+        if not self.is_connected or self.document_count == 0:
+            return None
+
+        clean_path = str(self.temp_snapshot_path).replace("\\", "/")
+        export_jsx = f"""
+try {{
+    var doc = app.activeDocument;
+    var f = new File("{clean_path}");
+    var opt = new PNGSaveOptions();
+    opt.compression = 9;
+    opt.interlaced = false;
+    doc.saveAs(f, opt, true, Extension.LOWERCASE);
+    return JSON.stringify({{"success": true, "path": f.fsName}});
+}} catch(e) {{
+    return JSON.stringify({{"success": false, "error": e.message}});
+}}
+"""
+        res = self.execute_jsx(export_jsx)
+        if res.get("success") and self.temp_snapshot_path.exists():
+            try:
+                img_data = self.temp_snapshot_path.read_bytes()
+                return base64.b64encode(img_data).decode("utf-8")
+            except Exception:
+                pass
+        return None
 
     def create_document(self, width: int = 1920, height: int = 1080, resolution: int = 72, name: str = "Untitled-AI") -> Dict[str, Any]:
         """Create a new Photoshop document."""

@@ -29,6 +29,22 @@ SYSTEM_DECISION_PROMPT = f"""
 당신은 사용자의 지시, 현재 열린 문서의 텍스트 DOM 상태(JSON), **그리고 실시간 캔버스 캡처 이미지(Vision)**를 모두 보고 판단합니다.
 
 ======================================================================
+🚨 [최우선 필수 규칙: 좌표계 & 가독성 가드레일 (ABSOLUTE RULES)]
+
+1. 📐 **Illustrator 좌표계 절대 준수 (음수 Y좌표 절대 금지!)**:
+   - 일러스트레이터의 Y=0은 바닥(Bottom)이고, Y=doc.height가 상단(Top)입니다.
+   - 상단에서 100pt 아래에 배치하려면 **반드시 `top = doc.height - 100` (양수)** 공식을 사용하세요!
+   - ⚠️ 절대 `top = -100`, `top = -400` 같은 음수를 사용하지 마세요! (캔버스 밖으로 날아가 사라집니다)
+   - LayoutSystem.setTextPos(tf, left, offsetFromTop) 또는 LayoutSystem.addRect(...) 헬퍼를 적극 활용하세요.
+
+2. 👁️ **배경-텍스트 고대비 가독성 (High Contrast)**:
+   - 다크/딥 배경(#122019, 딥그린, 네이비, 블랙 등)에는 **무조건 선명한 화이트(#FFFFFF)나 골드(#D4AF37), 밝은 세이지(#C5E0D0)** 폰트 색상을 적용하세요.
+   - ⚠️ 어두운 배경 위에 어두운 글자색(#18241D 등)을 적용하여 글자가 묻히는 실수를 절대 하지 마세요!
+
+3. 🧹 **중복 오브젝트 겹침 방지 (Clean Canvas)**:
+   - 전체 재배치나 새 디자인 작업 시, 기존 더러워진 박스/원형들이 덕지덕지 겹치지 않도록 필요시 `LayoutSystem.clearCanvas()`를 호출하거나 기존 패스를 깔끔하게 정리한 후 새로 그리세요.
+
+======================================================================
 🚨 [판단 및 질문 규칙 (STRICT CO-PILOT POLICY)]
 
 1. 다음의 경우에는 절대로 바로 코드를 실행하지 말고, 반드시 **action: "ask"** 로 질문하세요:
@@ -39,7 +55,7 @@ SYSTEM_DECISION_PROMPT = f"""
 
 2. 다음의 경우에만 **action: "execute"** (즉시 실행) 하세요:
    - 사용자가 이전 질문에 대해 특정 번호나 선택지를 답변했을 때 (예: "1번 명조체로 해줘", "가로 A4에 세이지 그린 톤으로 가자")
-   - 수치나 대상이 명확한 단일 수정 명령일 때 (예: "제목 글자 크기를 50pt로 키워줘", "배경색을 #1D3A2F로 바꿔줘")
+   - 수치나 대상이 명확한 단일 수정/정리 명령일 때 (예: "레이아웃 정리해줘", "제목 글자 크기를 50pt로 키워줘", "배경색을 #1D3A2F로 바꿔줘")
 
 ======================================================================
 🌟 [핵심 디자인 철학: Human-Designer Aesthetics (Anti-AI Slop Guardrails)]
@@ -212,8 +228,6 @@ class LLMEngine:
     def _auto_resolve_images(self, user_prompt: str) -> Dict[str, str]:
         """Check if user prompt needs photos, auto-resolve via Pinterest, Local path, or Stock search."""
         resolved = {}
-        
-        # Check if user prompt mentions images, photos, pinterest, local paths
         needs_image = any(w in user_prompt for w in ["사진", "이미지", "포토", "photo", "image", "핀터레스트", "pinterest", "http", ":/"])
         if needs_image:
             img_path = StockImageManager.resolve_image(user_prompt)

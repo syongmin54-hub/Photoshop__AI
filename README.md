@@ -1,11 +1,24 @@
-# 🎨 Adobe AI Co-Pilot (Photoshop & Illustrator Automation)
+<div align="center">
 
-> **자연어로 지시하는 무손실 디자인 자동화 & 멀티모달 비전 어시스턴트**  
-> 생성형 AI의 한계(저화질, 레이어 병합, 특정 부분 수정 불가)를 완벽히 해결하고, **실제 Adobe Photoshop & Illustrator 엔진을 자연어로 직접 제어**하는 차세대 디자인 Co-Pilot입니다.
+# 🎨 Adobe AI Co-Pilot
+### 자연어로 지시하는 무손실 디자인 자동화 & 멀티모달 비전 어시스턴트
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg)](https://www.python.org/)
+[![Gemini 3.7 Flash](https://img.shields.io/badge/AI%20Engine-Gemini%203.7%20Flash%20Vision-orange.svg)](https://deepmind.google/technologies/gemini/)
+[![Adobe Compatible](https://img.shields.io/badge/Adobe-Photoshop%20%26%20Illustrator-ff1493.svg)](https://www.adobe.com/)
+[![Zero Cost](https://img.shields.io/badge/Cost-100%25%20Free%20(Google%20OAuth)-success.svg)](https://github.com/syongmin54-hub/Photoshop__AI)
+
+<br/>
+
+**생성형 AI의 한계(저화질, 레이어 병합, 특정 부분 수정 불가)를 완벽히 해결합니다.**  
+실제 **Adobe Photoshop & Illustrator의 텍스트, 벡터 패스, 레이어 엔진을 자연어로 직접 제어**하는 차세대 디자인 Co-Pilot입니다.
+
+</div>
 
 ---
 
-## 🌟 6대 핵심 기능 (Key Highlights)
+## 🌟 6대 핵심 차별화 기능 (Key Highlights)
 
 ```mermaid
 graph TD
@@ -53,9 +66,9 @@ graph TD
 
 ## 🚀 빠른 시작 (Quick Start)
 
-### 1. 실행 파일(.exe)로 실행 (추천)
+### 1. 실행 파일(.exe)로 실행 (비개발자 추천 ⭐)
 - `dist/AdobeAI.exe`를 더블클릭하여 실행합니다.
-- 최초 1회 **`/login`** 입력 ➔ 본인 Google 계정(무료/구독)으로 1초 로그인하면 설정 끝!
+- 최초 1회 **`/login`** 입력 ➔ 본인 Google 계정(무료/구독)으로 1초 로그인하면 끝!
 
 ### 2. 소스 코드로 실행
 ```bash

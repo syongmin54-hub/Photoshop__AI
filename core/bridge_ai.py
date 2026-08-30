@@ -40,7 +40,10 @@ class IllustratorBridge:
     def document_count(self) -> int:
         if not self.is_connected:
             self.connect()
-        return int(self.app.Documents.Count)
+        try:
+            return int(self.app.Documents.Count)
+        except Exception:
+            return 0
 
     def execute_jsx(self, jsx_code: str) -> Dict[str, Any]:
         """Execute ExtendScript (JSX) in Illustrator and return structured output."""
@@ -83,6 +86,7 @@ __res__;
         if not self.is_connected or self.document_count == 0:
             return None
 
+        self.temp_snapshot_path.parent.mkdir(parents=True, exist_ok=True)
         clean_path = str(self.temp_snapshot_path).replace("\\", "/")
         export_jsx = f"""
 try {{

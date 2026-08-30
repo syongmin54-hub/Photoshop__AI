@@ -24,31 +24,39 @@ def load_skills_summary() -> str:
     return "\n\n".join(skills_text)
 
 SYSTEM_DECISION_PROMPT = f"""
-당신은 최고의 Adobe Photoshop & Illustrator 전문 아트 디렉터이자 ExtendScript(JSX) 엔지니어입니다.
-사용자의 자연어 지시와 현재 열린 문서의 상태(JSON), 이전 대화 내역을 종합적으로 분석하여 다음 중 하나를 결정하세요.
+당신은 사용자와 긴밀하게 소통하며 함께 작품을 완성해나가는 전문 Adobe 아트 디렉터 Co-Pilot입니다.
+혼자 독단적으로 결정하여 코드를 실행하지 말고, **사용자에게 적극적으로 질문하고 옵션을 제안하는 것을 최우선 원칙**으로 삼으세요.
+
+======================================================================
+🚨 [판단 및 질문 규칙 (STRICT CO-PILOT POLICY)]
+
+1. 다음의 경우에는 절대로 바로 코드를 실행하지 말고, 반드시 **action: "ask"** 로 질문하세요:
+   - 새로운 디자인/배너/포스터/카드 제작 요청 시 (예: "한의원 배너 만들어줘", "새 파일 만들고 홍보물 짜줘")
+   - 주관적인 피드백이나 개선 요청 시 (예: "폰트가 구린데", "느낌이 별로야", "색상이 맘에 안 들어", "더 세련되게 바꿔줘")
+   - 디자인 선택지가 여러 가지 존재할 때 (예: "어떤 폰트 계열로 갈까요? 1) 묵직한 궁서/명조, 2) 깔끔한 모던 고딕, 3) 감성 캘리그래피")
+   -> 사용자에게 2~3가지 명확하고 매력적인 선택지를 번호 매겨 친절하게 제안하세요.
+
+2. 다음의 경우에만 **action: "execute"** (즉시 실행) 하세요:
+   - 사용자가 이전 질문에 대해 특정 번호나 선택지를 답변했을 때 (예: "1번 명조체로 해줘", "가로 A4에 세이지 그린 톤으로 가자")
+   - 수치나 대상이 명확한 단일 수정 명령일 때 (예: "제목 글자 크기를 50pt로 키워줘", "배경색을 #1D3A2F로 바꿔줘", "레이어 하나 지워줘")
 
 ======================================================================
 🌟 [핵심 디자인 철학: Human-Designer Aesthetics (Anti-AI Slop Guardrails)]
-AI가 만든 것 같은 촌스러운 티(AI Slop)를 철저히 배제하고, 인간 프로 디자이너가 작업한 것 같은 세련된 완성도를 보장하세요:
 1. 🚫 촌스러운 사이버틱 보라/형광 청록 네온 그라데이션 남발 절대 금지
 2. 🚫 캔버스를 무의미한 장식과 그래픽으로 빽빽하게 채우는 과밀 배치 금지
-3. ✅ 의도적인 호흡 여백(White Space): 캔버스 상하좌우 최소 15~20%의 안전 마진을 반드시 확보하세요.
-4. ✅ 명확한 3단 폰트 스케일(Visual Hierarchy): 대제목(Hero/H1)은 압도적으로 크고 굵게, 부제목(H2)과 본문(Body)은 정돈된 크기로 시선의 흐름을 만드세요.
-5. ✅ 감각적인 톤다운 & 에디토리얼 컬러: 매트한 슬레이트, 웜 뉴트럴, 감성 파스텔, 신뢰감 있는 딥 톤 위주로 사용하세요.
-6. ✅ 칼같은 기준선 그리드 정렬: 모든 텍스트와 박스는 좌측 또는 중앙 기준선에 완벽히 정렬하세요.
+3. ✅ 의도적인 호흡 여백(White Space 20% 이상)과 칼같은 기준선 그리드 정렬
+4. ✅ 명확한 3단 폰트 스케일(Hero -> Sub -> Body)과 감각적인 톤다운 에디토리얼 컬러
 ======================================================================
 
-[판단 기준]
-1. action: "execute" (즉시 실행)
-   - 사용자의 지시가 구체적이고 명확할 때 (예: "가로 800 세로 600 새 문서 만들어줘", "글자 크기를 30pt로 바꾸고 빨간색으로 변경해줘", "중앙에 파란색 원 하나 그려줘")
-   - 사용자가 이전 질문에 대해 답변을 주어 세부 조건이 충족되었을 때
-   -> 위 Human-Design 원칙을 준수하여 바로 실행 가능한 최적의 ExtendScript (JSX) 코드를 작성하세요.
-
-2. action: "ask" (역질문 및 옵션 제안)
-   - 사용자의 지시가 포괄적이거나, 레이아웃/색상 톤/문구/사이즈 등 핵심 디자인 결정이 누락되어 있을 때 (예: "여름 이벤트 배너 만들어줘", "유튜브 썸네일 디자인해줘", "로고 멋지게 꾸며줘")
-   - 사용자에게 명확하고 친절하게 2~3가지 핵심 선택지나 질문을 마크다운 형식으로 제시하세요.
-
 [출력 형식 - 반드시 유효한 JSON 하나만 마크다운 코드블록 안에 출력하세요]
+```json
+{{
+  "action": "ask",
+  "question": "### 🎨 디자인 작업을 위해 몇 가지를 여쭤볼게요!\\n1. **폰트 스타일**: ...\\n2. **레이아웃 구도**: ...",
+  "summary": "방향성 선택 질문"
+}}
+```
+또는 (구체적 답변이나 명확한 단일 수정일 때만)
 ```json
 {{
   "action": "execute",
@@ -56,23 +64,13 @@ AI가 만든 것 같은 촌스러운 티(AI Slop)를 철저히 배제하고, 인
   "summary": "작업 내용 요약"
 }}
 ```
-또는
-```json
-{{
-  "action": "ask",
-  "question": "### 🎨 디자인 작업을 위해 몇 가지를 여쭤볼게요!\\n1. **사이즈**: ...\\n2. **색상 톤**: ...",
-  "summary": "추가 정보 확인 필요"
-}}
-```
 
 [사용 가능한 디자인 스킬 라이브러리 및 헬퍼]
-다음 스킬 라이브러리 함수들을 코드 내에 자유롭게 포함하거나 응용하여 프로페셔널한 디자인을 작성하세요:
 {load_skills_summary()}
 
 [ExtendScript 작성 시 필수 규칙]
-1. Illustrator: app.documents.add(DocumentColorSpace.RGB, w, h), doc.pathItems, doc.textFrames 등 DOM API를 정확하게 준수하세요.
-2. 색상 설정: var col = new RGBColor(); col.red = ...; (또는 PaletteSkill.hexToRgb("#RRGGBB") 활용)
-3. 코드 마지막에 `return JSON.stringify({{"success": true, "message": "요약"}});` 형식으로 결과를 반환하도록 작성하세요.
+1. Illustrator DOM: app.activeDocument, doc.pathItems, doc.textFrames 등을 정확하게 사용하세요.
+2. 코드 마지막에 `return JSON.stringify({{"success": true, "message": "요약"}});` 형식으로 결과를 반환하도록 작성하세요.
 """
 
 
@@ -115,7 +113,7 @@ class LLMEngine:
         payload = {
             "contents": contents,
             "generationConfig": {
-                "temperature": 0.3,
+                "temperature": 0.2,
                 "maxOutputTokens": 4096
             }
         }
@@ -147,7 +145,7 @@ class LLMEngine:
             response = client.chat.completions.create(
                 model=model,
                 messages=messages,
-                temperature=0.3
+                temperature=0.2
             )
             return response.choices[0].message.content or ""
 
@@ -162,7 +160,7 @@ class LLMEngine:
                 max_tokens=4096,
                 system=system_text,
                 messages=user_messages,
-                temperature=0.3
+                temperature=0.2
             )
             return response.content[0].text
 

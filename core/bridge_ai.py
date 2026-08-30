@@ -2,25 +2,26 @@ import base64
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 import core.compat  # noqa: F401
 from core.json_polyfill import EXTENDSCRIPT_JSON_POLYFILL
 import win32com.client
 
 
 class IllustratorBridge:
-    """Adobe Illustrator COM Bridge & High-Performance ExtendScript Runner."""
+    """Adobe Illustrator COM Bridge & High-Performance Decomposed ExtendScript Runner."""
 
     def __init__(self):
         self.app = None
         self._connected = False
-        self.temp_snapshot_path = (Path.cwd() / "temp_images" / "canvas_snapshot.png").resolve()
+        self.temp_img_dir = (Path.cwd() / "temp_images").resolve()
+        self.temp_img_dir.mkdir(parents=True, exist_ok=True)
+        self.temp_snapshot_path = self.temp_img_dir / "canvas_snapshot.png"
 
     def connect(self) -> bool:
         """Connect to or launch Adobe Illustrator."""
         try:
             self.app = win32com.client.Dispatch("Illustrator.Application")
-            # Suppress modal alert lags
             try:
                 self.app.UserInteractionLevel = -1  # DONTDISPLAYALERTS
             except Exception:
@@ -87,20 +88,18 @@ __res__;
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def capture_canvas_snapshot(self, scale_percent: float = 15.0) -> Optional[str]:
-        """Ultra-fast export current canvas to lightweight PNG (0.05s) for Vision AI."""
+    def capture_canvas_snapshot(self, scale_percent: float = 20.0) -> Optional[str]:
+        """Fast export active canvas to lightweight PNG for Vision AI."""
         if not self.is_connected or self.document_count == 0:
             return None
 
-        self.temp_snapshot_path.parent.mkdir(parents=True, exist_ok=True)
         clean_path = str(self.temp_snapshot_path).replace("\\", "/")
-        
         export_jsx = f"""
 try {{
     var doc = app.activeDocument;
     var f = new File("{clean_path}");
     var opt = new ExportOptionsPNG24();
-    opt.antiAliasing = false; // Fast preview without heavy anti-aliasing
+    opt.antiAliasing = false;
     opt.transparency = false;
     opt.artBoardClipping = true;
     opt.horizontalScale = {scale_percent};
@@ -119,6 +118,53 @@ try {{
             except Exception:
                 pass
         return None
+
+    def capture_all_artboards_snapshots(self, scale_percent: float = 20.0) -> List[Dict[str, Any]]:
+        """Decomposed Multi-page Vision: Export each Artboard/Page as an individual visual snapshot."""
+        if not self.is_connected or self.document_count == 0:
+            return []
+
+        clean_dir = str(self.temp_img_dir).replace("\\", "/")
+        export_all_jsx = f"""
+try {{
+    var doc = app.activeDocument;
+    var list = [];
+    var opt = new ExportOptionsPNG24();
+    opt.antiAliasing = false;
+    opt.transparency = false;
+    opt.artBoardClipping = true;
+    opt.horizontalScale = {scale_percent};
+    opt.verticalScale = {scale_percent};
+
+    for (var a = 0; a < doc.artboards.length; a++) {{
+        doc.artboards.setActiveArtboardIndex(a);
+        var ab = doc.artboards[a];
+        var outPath = "{clean_dir}/page_" + a + ".png";
+        var f = new File(outPath);
+        doc.exportFile(f, ExportType.PNG24, opt);
+        list.push({{"index": a, "name": ab.name, "path": f.fsName}});
+    }}
+    return JSON.stringify({{"success": true, "pages": list}});
+}} catch(e) {{
+    return JSON.stringify({{"success": false, "error": e.message}});
+}}
+"""
+        res = self.execute_jsx(export_all_jsx)
+        pages_b64 = []
+        if res.get("success") and "pages" in res.get("result", {}):
+            for p in res["result"]["pages"]:
+                p_file = Path(p["path"])
+                if p_file.exists():
+                    try:
+                        b64 = base64.b64encode(p_file.read_bytes()).decode("utf-8")
+                        pages_b64.append({
+                            "index": p["index"],
+                            "name": p["name"],
+                            "base64": b64
+                        })
+                    except Exception:
+                        pass
+        return pages_b64
 
     def create_document(self, width_pt: float = 800.0, height_pt: float = 600.0, name: str = "Untitled-AI") -> Dict[str, Any]:
         """Create a new document with specified dimensions (in points)."""

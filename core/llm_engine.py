@@ -26,7 +26,43 @@ def load_skills_summary() -> str:
 
 SYSTEM_DECISION_PROMPT = f"""
 당신은 최고의 Adobe Photoshop & Illustrator 전문 멀티모달 AI 아트 디렉터이자 ExtendScript(JSX) 엔지니어입니다.
-당신은 사용자의 지시, 현재 열린 문서의 텍스트 DOM 상태(JSON), **그리고 실시간 캔버스 캡처 이미지(Vision)**를 모두 보고 판단합니다.
+당신은 사용자의 지시, **각각 분해된 텍스트/이미지/아트보드 요소 구조(Decomposed DOM)**, 그리고 **페이지별 실시간 비전 스냅샷(Multi-page Vision)**을 모두 면밀히 뜯어보고 분석하여 디자인합니다.
+
+======================================================================
+🚨 [최우선 의도 판단 & 실행 분기 규칙 (ACTION DECISION RULES)]
+
+1. ✅ **ACTION: execute (즉시 코드 생성 및 실행 - 최우선 처리)**:
+   - 사용자가 특정 크기, 장수, 규격, 텍스트 내용을 주며 제작을 요구할 때 (예: "1080x1080 4장 카드뉴스 만들어줘", "A4 배너 만들어줘", "X-배너 제작해줘")
+   - 사용자가 이전 질문에 대해 답변하거나 번호를 선택했을 때 (예: "1번으로 해줘", "2번으로 가자", "명조 스타일로 완성해줘")
+   - 수정/정리/조회 명령일 때 (예: "글자 크기 키워줘", "배경색 바꿔줘", "레이아웃 정리해줘")
+   -> **즉시 최고의 ExtendScript(JSX) 코드를 작성하여 실행**하세요!
+
+2. ❓ **ACTION: ask (질문 및 옵션 제안)**:
+   - 사용자가 아무런 규격/내용/주제 없이 오직 "배너 만들어봐", "디자인 시작해줘" 같은 모호한 단 한마디만 했을 때만 사용하세요.
+
+======================================================================
+[출력 형식 - 반드시 아래 포맷을 엄격히 준수하세요]
+
+만약 즉시 실행(execute)하는 경우:
+ACTION: execute
+SUMMARY: 작업 내용 요약
+
+```javascript
+/* 순수 ExtendScript(JSX) 코드 */
+```
+
+만약 추가 질문(ask)이 필요한 경우:
+ACTION: ask
+QUESTION:
+### 🎨 디자인 작업을 위해 몇 가지를 여쭤볼게요!
+1. **스타일**: ...
+2. **레이아웃**: ...
+
+======================================================================
+🌟 [핵심 기능 및 지원 영역]
+- **단일 페이지/홍보배너/현수막**: A4, X-배너(600x1800mm), 가로형 대형 현수막, 유튜브 썸네일, 웹 배너
+- **다중 페이지(카드뉴스 / 슬라이드)**: MultiPageSkill.createMultiPages(4, 1080, 1080) 등을 활용하여 4~10장 카드뉴스 일괄 생성
+- **다중 사진 포트폴리오/룩북**: PortfolioSkill.createPhotoGrid(...)를 활용한 복합 갤러리 그리드 레이아웃
 
 ======================================================================
 🚨 [최우선 필수 규칙: 좌표계 & 가독성 가드레일 (ABSOLUTE RULES)]
@@ -34,28 +70,14 @@ SYSTEM_DECISION_PROMPT = f"""
 1. 📐 **Illustrator 좌표계 절대 준수 (음수 Y좌표 절대 금지!)**:
    - 일러스트레이터의 Y=0은 바닥(Bottom)이고, Y=doc.height가 상단(Top)입니다.
    - 상단에서 100pt 아래에 배치하려면 **반드시 `top = doc.height - 100` (양수)** 공식을 사용하세요!
-   - ⚠️ 절대 `top = -100`, `top = -400` 같은 음수를 사용하지 마세요!
-   - LayoutSystem.setTextPos(tf, left, offsetFromTop) 또는 LayoutSystem.addRect(...) 헬퍼를 사용하세요.
+   - LayoutSystem.setTextPos(tf, left, offsetFromTop) 또는 LayoutSystem.addRect(...) 헬퍼를 적극 활용하세요.
 
 2. 👁️ **배경-텍스트 고대비 가독성 (High Contrast)**:
    - 다크/딥 배경(#122019, 딥그린, 네이비, 블랙 등)에는 **무조건 선명한 화이트(#FFFFFF)나 골드(#D4AF37), 밝은 세이지(#C5E0D0)** 폰트 색상을 적용하세요.
-   - ⚠️ 어두운 배경 위에 어두운 글자색을 적용하여 글자가 묻히는 실수를 절대 하지 마세요!
+   - 라이트 배경에는 다크 차콜(#18181B) 텍스트를 적용하세요.
 
 3. 🧹 **중복 오브젝트 겹침 방지 (Clean Canvas)**:
-   - 전체 재배치나 새 디자인 작업 시, 기존 더러워진 박스/도형들이 겹치지 않도록 `LayoutSystem.clearCanvas()`를 호출하거나 기존 패스를 정리한 후 새로 그리세요.
-
-======================================================================
-🚨 [판단 및 질문 규칙 (STRICT CO-PILOT POLICY)]
-
-1. 다음의 경우에는 절대로 바로 코드를 실행하지 말고, 반드시 **action: "ask"** 로 질문하세요:
-   - 새로운 디자인/배너/포스터/카드 제작 요청 시 (예: "한의원 배너 만들어줘", "새 파일 만들고 홍보물 짜줘")
-   - 주관적인 피드백이나 개선 요청 시 (예: "폰트가 구린데", "느낌이 별로야", "색상이 맘에 안 들어", "더 세련되게 바꿔줘")
-   - 디자인 선택지가 여러 가지 존재할 때
-   -> 2~3가지 명확하고 매력적인 선택지를 번호 매겨 친절하게 제안하세요.
-
-2. 다음의 경우에만 **action: "execute"** (즉시 실행) 하세요:
-   - 사용자가 이전 질문에 대해 특정 번호나 선택지를 답변했을 때 (예: "1번 명조체로 해줘", "가로 A4에 세이지 그린 톤으로 가자")
-   - 수치나 대상이 명확한 단일 수정/정리/조회 명령일 때 (예: "레이아웃 정리해줘", "제목 글자 크기를 50pt로 키워줘", "배경색을 #1D3A2F로 바꿔줘")
+   - 전체 재배치나 새 디자인 작업 시, 기존 더러워진 박스/도형들이 겹치지 않도록 `LayoutSystem.clearCanvas()`를 호출하거나 기존 요소를 정리한 후 새로 그리세요.
 
 ======================================================================
 🌟 [핵심 디자인 철학: Human-Designer Aesthetics (Anti-AI Slop Guardrails)]
@@ -63,37 +85,19 @@ SYSTEM_DECISION_PROMPT = f"""
 2. 🚫 캔버스를 무의미한 장식과 그래픽으로 빽빽하게 채우는 과밀 배치 금지
 3. ✅ 의도적인 호흡 여백(White Space 20% 이상)과 칼같은 기준선 그리드 정렬
 4. ✅ 명확한 3단 폰트 스케일(Hero -> Sub -> Body)과 감각적인 톤다운 에디토리얼 컬러
-======================================================================
-
-[출력 형식 - 반드시 유효한 JSON 하나만 마크다운 코드블록 안에 출력하세요]
-```json
-{{
-  "action": "ask",
-  "question": "### 🎨 디자인 작업을 위해 몇 가지를 여쭤볼게요!\\n1. **폰트 스타일**: ...\\n2. **레이아웃 구도**: ...",
-  "summary": "방향성 선택 질문"
-}}
-```
-또는 (구체적 답변이나 명확한 단일 수정일 때만)
-```json
-{{
-  "action": "execute",
-  "code": "/* 순수 ExtendScript(JSX) 코드 */",
-  "summary": "작업 내용 요약"
-}}
-```
 
 [사용 가능한 디자인 스킬 라이브러리 및 헬퍼]
 {load_skills_summary()}
 
 [ExtendScript 작성 시 필수 규칙]
-1. Illustrator DOM: app.activeDocument, doc.pathItems, doc.textFrames, doc.placedItems 등을 정확하게 사용하세요.
+1. Illustrator DOM: app.activeDocument, doc.pathItems, doc.textFrames, doc.placedItems, doc.artboards 등을 정확하게 사용하세요.
 2. 폰트 적용 시: TypographySkill.koreanFonts 매핑 테이블의 검증된 PostScript 이름을 우선 사용하세요.
 3. 코드 마지막에 `return JSON.stringify({{"success": true, "message": "요약"}});` 형식으로 결과를 반환하도록 작성하세요.
 """
 
 
 class LLMEngine:
-    """Ultra-Fast Multimodal Vision & Smart Co-Pilot Engine."""
+    """Ultra-Fast Decomposed Multimodal Vision & Smart Co-Pilot Engine."""
 
     def __init__(self, provider: Optional[str] = None):
         self.provider = (provider or os.getenv("LLM_PROVIDER", "gemini_oauth")).lower()
@@ -107,8 +111,8 @@ class LLMEngine:
         """Reset conversation context history."""
         self.history = []
 
-    def _call_gemini_oauth(self, messages: List[Dict[str, Any]], image_base64: Optional[str] = None) -> str:
-        """Call Gemini REST API using Google OAuth 2.0 with optional Vision Multimodal image payload."""
+    def _call_gemini_oauth(self, messages: List[Dict[str, Any]], image_payloads: Optional[List[Dict[str, str]]] = None) -> str:
+        """Call Gemini REST API using Google OAuth 2.0 with multi-page / decomposed image payloads."""
         token = self.oauth_manager.get_valid_token()
         model_name = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
         
@@ -120,13 +124,14 @@ class LLMEngine:
                 system_instruction = {"parts": [{"text": m["content"]}]}
             elif m["role"] == "user":
                 parts = []
-                if image_base64 and m == messages[-1]:
-                    parts.append({
-                        "inlineData": {
-                            "mimeType": "image/png",
-                            "data": image_base64
-                        }
-                    })
+                if image_payloads and m == messages[-1]:
+                    for img in image_payloads:
+                        parts.append({
+                            "inlineData": {
+                                "mimeType": "image/png",
+                                "data": img["base64"]
+                            }
+                        })
                 parts.append({"text": m["content"]})
                 contents.append({"role": "user", "parts": parts})
             elif m["role"] == "assistant":
@@ -141,13 +146,13 @@ class LLMEngine:
             "contents": contents,
             "generationConfig": {
                 "temperature": 0.2,
-                "maxOutputTokens": 4096
+                "maxOutputTokens": 8192
             }
         }
         if system_instruction:
             payload["systemInstruction"] = system_instruction
 
-        resp = requests.post(url, headers=headers, json=payload, timeout=30)
+        resp = requests.post(url, headers=headers, json=payload, timeout=60)
         if resp.status_code != 200:
             raise RuntimeError(f"Gemini API 오류 ({resp.status_code}): {resp.text}")
 
@@ -157,10 +162,10 @@ class LLMEngine:
         except (KeyError, IndexError):
             raise RuntimeError(f"Gemini 응답 파싱 실패: {res_data}")
 
-    def _call_llm(self, messages: List[Dict[str, Any]], image_base64: Optional[str] = None) -> str:
+    def _call_llm(self, messages: List[Dict[str, Any]], image_payloads: Optional[List[Dict[str, str]]] = None) -> str:
         """Call LLM based on configured provider."""
         if self.provider == "gemini_oauth" or self.provider == "gemini":
-            return self._call_gemini_oauth(messages, image_base64)
+            return self._call_gemini_oauth(messages, image_payloads)
 
         elif self.provider == "openai" or self.provider == "custom":
             import openai
@@ -195,32 +200,56 @@ class LLMEngine:
             raise ValueError(f"지원하지 않는 LLM 프로바이더입니다: {self.provider}")
 
     @staticmethod
-    def extract_json_or_code(raw_text: str) -> Dict[str, Any]:
-        """Extract structured JSON decision or fallback to raw code execution."""
-        match = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", raw_text)
-        if match:
-            try:
-                return json.loads(match.group(1))
-            except json.JSONDecodeError:
-                pass
-        
-        try:
-            return json.loads(raw_text.strip())
-        except json.JSONDecodeError:
-            pass
+    def extract_decision(raw_text: str) -> Dict[str, Any]:
+        """Extract structured ACTION, SUMMARY, CODE or QUESTION robustly with unclosed block recovery."""
+        raw = raw_text.strip()
 
-        code_match = re.search(r"```(?:javascript|jsx|js)?\s*([\s\S]*?)\s*```", raw_text)
-        if code_match:
+        # 1. Check for Javascript code block (closed or unclosed)
+        code = None
+        closed_match = re.search(r"```(?:javascript|jsx|js)?\s*([\s\S]*?)\s*```", raw, re.IGNORECASE)
+        if closed_match:
+            code = closed_match.group(1).strip()
+        else:
+            # Check for unclosed code block (e.g. ```javascript at start)
+            unclosed_match = re.search(r"```(?:javascript|jsx|js)?\s*([\s\S]+)$", raw, re.IGNORECASE)
+            if unclosed_match and ("app." in unclosed_match.group(1) or "function" in unclosed_match.group(1)):
+                code = unclosed_match.group(1).strip()
+
+        # Check explicit action and summary headers
+        summary_match = re.search(r"^SUMMARY:\s*(.+)$", raw, re.IGNORECASE | re.MULTILINE)
+        summary = summary_match.group(1).strip() if summary_match else "디자인 생성 및 실행"
+
+        if code:
             return {
                 "action": "execute",
-                "code": code_match.group(1).strip(),
-                "summary": "코드 즉시 실행"
+                "code": code,
+                "summary": summary
             }
+
+        # 2. JSON Fallback
+        first_brace = raw.find('{')
+        last_brace = raw.rfind('}')
+        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+            try:
+                parsed = json.loads(raw[first_brace:last_brace+1])
+                if isinstance(parsed, dict) and "code" in parsed:
+                    return {
+                        "action": "execute",
+                        "code": parsed.get("code", ""),
+                        "summary": parsed.get("summary", "디자인 적용")
+                    }
+            except Exception:
+                pass
+
+        # 3. Question (Ask) Fallback
+        q_text = raw
+        if "QUESTION:" in raw:
+            q_text = raw.split("QUESTION:", 1)[1].strip()
 
         return {
             "action": "ask",
-            "question": raw_text.strip(),
-            "summary": "안내 메시지"
+            "question": q_text,
+            "summary": summary
         }
 
     def process_prompt(
@@ -231,20 +260,27 @@ class LLMEngine:
         target_app: str = "illustrator",
         max_retries: int = 3
     ) -> Dict[str, Any]:
-        """Analyze intent with Vision Multimodal, ask questions if needed, or execute code."""
-        # 1. Fast Canvas Vision snapshot (takes ~0.05s)
-        canvas_b64 = None
+        """Analyze intent with Decomposed Vision Multimodal, ask questions if needed, or execute code."""
+        # 1. Capture multi-page decomposed snapshots for Vision AI
+        image_payloads = []
         try:
-            canvas_b64 = bridge.capture_canvas_snapshot(scale_percent=15.0)
+            if hasattr(bridge, "capture_all_artboards_snapshots"):
+                pages = bridge.capture_all_artboards_snapshots(scale_percent=15.0)
+                for p in pages:
+                    image_payloads.append({"name": f"Page_{p['index']}", "base64": p["base64"]})
+            elif hasattr(bridge, "capture_canvas_snapshot"):
+                b64 = bridge.capture_canvas_snapshot()
+                if b64:
+                    image_payloads.append({"name": "Canvas", "base64": b64})
         except Exception:
-            canvas_b64 = None
+            pass
 
-        # 2. Fast local image check (without blocking internet crawlers)
+        # 2. Fast local image check
         local_img = StockImageManager.resolve_image(user_prompt)
         img_context = f"\n\n[사용 가능한 로컬/임시 이미지 파일]: '{local_img}'" if local_img else ""
 
         current_context = (
-            f"[현재 {target_app} 문서 텍스트 DOM 상태]\n"
+            f"[현재 {target_app} 정밀 분해 요소 구조 (Decomposed DOM)]\n"
             f"{json.dumps(doc_state, ensure_ascii=False, indent=2)}"
             f"{img_context}\n\n"
             f"[사용자 지시]\n{user_prompt}"
@@ -254,8 +290,8 @@ class LLMEngine:
         messages.extend(self.history)
         messages.append({"role": "user", "content": current_context})
 
-        raw_response = self._call_llm(messages, image_base64=canvas_b64)
-        decision = self.extract_json_or_code(raw_response)
+        raw_response = self._call_llm(messages, image_payloads=image_payloads)
+        decision = self.extract_decision(raw_response)
 
         # A. If LLM decides to ask clarifying questions
         if decision.get("action") == "ask":
@@ -294,10 +330,10 @@ class LLMEngine:
             last_error = result.get("error", "알 수 없는 오류")
             fix_messages = [
                 {"role": "system", "content": SYSTEM_DECISION_PROMPT},
-                {"role": "user", "content": f"[이전 실행 코드]\n```javascript\n{code}\n```\n\n[오류 발생]\n{last_error}\n\n오류를 해결한 올바른 JSON(action: execute, code: ...) 형식으로 다시 작성하세요."}
+                {"role": "user", "content": f"[이전 실행 코드]\n```javascript\n{code}\n```\n\n[오류 발생]\n{last_error}\n\n오류를 해결한 올바른 ExtendScript 코드를 마크다운 코드블록(```javascript ... ```) 안에 다시 작성하세요."}
             ]
             fix_raw = self._call_llm(fix_messages)
-            fix_decision = self.extract_json_or_code(fix_raw)
+            fix_decision = self.extract_decision(fix_raw)
             code = fix_decision.get("code", "")
 
         return {

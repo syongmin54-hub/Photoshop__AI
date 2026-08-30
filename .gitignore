@@ -5,6 +5,11 @@ __pycache__/
 venv/
 .venv/
 
+# Build artifacts
+build/
+dist/
+*.spec
+
 # Secrets & Local Tokens (절대 공유 금지 파일)
 .env
 gemini_token.json
